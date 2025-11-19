@@ -346,8 +346,8 @@ def main():
     if success:
         print("🎉 СИСТЕМА ГОТОВА К ИСПОЛЬЗОВАНИЮ!")
         print("\nДоступные интерфейсы:")
-        print("  • GUI: python3 co2_gui.py")
-        print("  • CLI: python3 co2_cli.py")
+        print("  • CLI (города): python3 co2_cli.py")
+        print("  • CLI (координаты): python3 co2_routes_cli.py lat1 lon1 lat2 lon2")
         print("  • API: import co2_calculator")
     else:
         print("❌ ОБНАРУЖЕНЫ ПРОБЛЕМЫ В СИСТЕМЕ")
