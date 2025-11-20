@@ -1,284 +1,130 @@
-# CO2 Калькулятор
+## CO2 Calculator
 
-Python-модуль для расчета выбросов CO2 между двумя географическими точками с поддержкой различных видов транспорта.
+Минимальный учебный проект для расчета выбросов CO₂ и демонстрации интеграции с внешними API.
 
-## Возможности
+Основная бизнес-логика расчета находится в [co2_calculator.py](cci:7://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/co2_calculator.py:0:0-0:0) и использует только стандартную библиотеку Python.
 
-- 🌍 **Расчет расстояний по прямой** - используя формулу Хаверсина
-- 🛣️ **Реальные маршруты** - через OpenRouteService API
-- 🚗 **Разные виды транспорта** - автомобиль, автобус, поезд, самолет
-- 📊 **Коэффициенты выбросов CO2** - актуальные данные в кг/пассажиро-км
-- 🔧 **Минимальные зависимости** - только стандартная библиотека Python
-- 🛡️ **Обработка ошибок** - автоматический fallback при недоступности API
+Файл [example.py](cci:7://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/example.py:0:0-0:0) демонстрирует концепцию API-клиентов:
 
-## Установка
+- клиент для сервиса маршрутов ([RouteApiClient](cci:2://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/example.py:25:0-70:37));
+- клиент для сервиса расчета выбросов ([Co2ApiClient](cci:2://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/example.py:92:0-165:9));
+- переключаемый режим работы: мок / реальные HTTP-запросы.
 
-Клонируйте репозиторий или скопируйте файл `co2_calculator.py` в ваш проект:
+Тесты находятся в файлах [test_basic.py](cci:7://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/test_basic.py:0:0-0:0) и [test_full_system.py](cci:7://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/test_full_system.py:0:0-0:0).
 
-```bash
-git clone <repository-url>
-cd counterCO2
-```
+---
 
-Никаких дополнительных зависимостей не требуется - модуль использует только стандартную библиотеку Python.
+## Зависимости
 
-## Быстрый старт
+Проект использует стандартную библиотеку Python и не требует внешних зависимостей для работы основной логики.
 
-```python
-from co2_calculator import CO2Calculator
+Опционально для разработки и тестирования могут использоваться:
 
-# Создание калькулятора
-calculator = CO2Calculator()
+- pytest
+- black
+- flake8
 
-# Координаты Москвы и Санкт-Петербурга
-moscow_lat, moscow_lon = 55.7558, 37.6176
-spb_lat, spb_lon = 59.9311, 30.3609
+См. [requirements.txt](cci:7://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/requirements.txt:0:0-0:0) для примечаний.
 
-# Расчет расстояния по прямой
-distance = calculator.calculate_distance_direct(
-    moscow_lat, moscow_lon, spb_lat, spb_lon
-)
-print(f"Расстояние: {distance:.2f} км")
+---
 
-# Расчет выбросов CO2 для автомобиля
-emissions = calculator.get_co2_emissions(distance, 'car')
-print(f"Выбросы CO2: {emissions:.3f} кг")
-```
+## Запуск базового примера CO₂ (без API)
 
-## Основные методы
+Пример базового использования калькулятора CO₂ без внешних API (если предусмотрен отдельный интерфейс) см. в [co2_calculator.py](cci:7://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/co2_calculator.py:0:0-0:0) и соответствующих тестах.
 
-### `calculate_distance_direct(lat1, lon1, lat2, lon2)`
-Расчет расстояния между двумя точками по прямой линии (формула Хаверсина).
+---
 
-**Параметры:**
-- `lat1, lon1` - широта и долгота первой точки
-- `lat2, lon2` - широта и долгота второй точки
+## Пример интеграции с API ([example.py](cci:7://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/example.py:0:0-0:0))
 
-**Возвращает:** расстояние в километрах
+[example.py](cci:7://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/example.py:0:0-0:0) демонстрирует сценарий:
 
-### `calculate_distance_route(lat1, lon1, lat2, lon2, transport_type)`
-Расчет расстояния через OpenRouteService API для реальных маршрутов.
+1. Выбор двух точек на карте (заглушка [select_points_on_map](cci:1://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/example.py:168:0-180:29)).
+2. Получение маршрута между точками через [RouteApiClient](cci:2://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/example.py:25:0-70:37).
+3. Получение оценки выбросов CO₂ по маршруту через [Co2ApiClient](cci:2://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/example.py:92:0-165:9).
+4. Вывод результатов в консоль.
 
-**Параметры:**
-- `lat1, lon1, lat2, lon2` - координаты точек
-- `transport_type` - тип транспорта ('car', 'bus', 'train', 'plane')
+Клиенты реализованы так, чтобы:
 
-**Возвращает:** расстояние в километрах
+- в режиме по умолчанию работать как моки (без реальных HTTP-запросов);
+- при необходимости переключаться на реальные HTTP-запросы через `urllib`, используя переменные окружения.
 
-### `get_co2_emissions(distance_km, transport_type)`
-Вычисление выбросов CO2 на основе расстояния и типа транспорта.
+---
 
-**Параметры:**
-- `distance_km` - расстояние в километрах
-- `transport_type` - тип транспорта
+## Переменные окружения для API
 
-**Возвращает:** выбросы CO2 в килограммах
+[example.py](cci:7://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/example.py:0:0-0:0) читает конфигурацию API из переменных окружения.
 
-### `get_available_transport_types()`
-Получение списка доступных типов транспорта.
+### Режим работы HTTP
 
-**Возвращает:** список строк с типами транспорта
+- `USE_REAL_HTTP`  
+  - не задано или значение отлично от `"1"` — включен мок-режим:
+    - HTTP-запросы не отправляются;
+    - параметры запроса выводятся в консоль;
+    - ответ генерируется локально в коде;
+  - `"1"` — выполняются реальные HTTP-запросы через стандартную библиотеку (`urllib`).
 
-### `calculate_full_emissions(lat1, lon1, lat2, lon2, transport_type, use_api=True)`
-Полный расчет с детальной информацией.
+### Клиент маршрутов ([RouteApiClient](cci:2://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/example.py:25:0-70:37))
 
-**Возвращает:** словарь с результатами:
-```python
-{
-    'distance_km': 635.2,
-    'transport_type': 'car',
-    'co2_coefficient': 0.21,
-    'co2_emissions_kg': 133.392,
-    'calculation_method': 'API маршрут'
-}
-```
+- `ROUTE_API_BASE_URL`  
+  - базовый URL сервиса маршрутов;  
+  - значение по умолчанию:  
+    `https://api.routes.local/v1`
+- `ROUTE_API_KEY`  
+  - опциональный ключ доступа;  
+  - если установлен, добавляется заголовок:  
+    `Authorization: Bearer <ключ>`
 
-## Коэффициенты выбросов CO2
+### Клиент расчета CO₂ ([Co2ApiClient](cci:2://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/example.py:92:0-165:9))
 
-| Транспорт | Коэффициент (кг/пассажиро-км) |
-|-----------|-------------------------------|
-| Автомобиль | 0.21 |
-| Автобус | 0.03 |
-| Поезд | 0.06 |
-| Самолет | 0.25 |
+- `CO2_API_BASE_URL`  
+  - базовый URL сервиса расчета выбросов;  
+  - значение по умолчанию:  
+    `https://api.co2.local/v1`
+- `CO2_API_KEY`  
+  - опциональный ключ доступа;  
+  - если установлен, добавляется заголовок:  
+    `Authorization: Bearer <ключ>`
 
-## Работа с OpenRouteService API
+---
 
-Для получения реальных маршрутов нужен бесплатный API ключ:
+## Примеры запуска
 
-1. Зарегистрируйтесь на [openrouteservice.org](https://openrouteservice.org)
-2. Получите API ключ (до 2000 запросов в день бесплатно)
-3. Используйте его при создании калькулятора:
-
-```python
-# С API ключом
-calculator = CO2Calculator(ors_api_key="ваш_api_ключ")
-
-# Расчет через API
-distance = calculator.calculate_distance_route(
-    55.7558, 37.6176, 59.9311, 30.3609, 'car'
-)
-```
-
-Если API ключ не предоставлен или API недоступен, модуль автоматически использует расчет по прямой линии.
-
-## Примеры использования
-
-### Сравнение видов транспорта
-
-```python
-from co2_calculator import CO2Calculator
-
-calculator = CO2Calculator()
-
-# Маршрут Москва - Санкт-Петербург
-moscow = (55.7558, 37.6176)
-spb = (59.9311, 30.3609)
-
-distance = calculator.calculate_distance_direct(*moscow, *spb)
-
-print("Сравнение выбросов CO2:")
-for transport in ['bus', 'train', 'car', 'plane']:
-    emissions = calculator.get_co2_emissions(distance, transport)
-    print(f"{transport}: {emissions:.2f} кг CO2")
-```
-
-### Расчет для дальних расстояний
-
-```python
-# Москва - Владивосток
-moscow = (55.7558, 37.6176)
-vladivostok = (43.1056, 131.8735)
-
-result = calculator.calculate_full_emissions(
-    *moscow, *vladivostok, 'plane', use_api=False
-)
-
-print(f"Расстояние: {result['distance_km']} км")
-print(f"Выбросы CO2: {result['co2_emissions_kg']} кг")
-```
-
-### Использование удобных функций
-
-```python
-from co2_calculator import (
-    calculate_distance_direct,
-    get_co2_emissions,
-    get_available_transport_types
-)
-
-# Прямое использование функций
-distance = calculate_distance_direct(55.7558, 37.6176, 59.9311, 30.3609)
-emissions = get_co2_emissions(distance, 'car')
-transports = get_available_transport_types()
-
-print(f"Доступные транспорты: {transports}")
-print(f"Выбросы: {emissions:.3f} кг CO2")
-```
-
-## Запуск примеров
-
-В проекте есть файл с готовыми примерами:
+### 1. Мок-режим (по умолчанию, без сетевых запросов)
 
 ```bash
 python example.py
-```
+В этом режиме:
 
-Этот скрипт демонстрирует:
-- Расчет расстояний и выбросов
-- Сравнение разных видов транспорта
-- Примеры для различных маршрутов
-- Работу с API (требует ключ)
+USE_REAL_HTTP не установлен;
+HTTP-запросы не выполняются;
+в консоль выводятся параметры «запросов» и результаты, рассчитанные локально.
+2. Мок-режим с пользовательскими базовыми URL
+bash
+export ROUTE_API_BASE_URL="https://api.my-routes.com/v1"
+export CO2_API_BASE_URL="https://api.my-co2.com/v1"
 
-## Пользовательские интерфейсы
+python example.py
+Используются указанные URL, но режим остается моковым (запросы не ходят в сеть).
 
-### 💻 Командная строка (CLI)
+3. Реальные HTTP-запросы
+bash
+export USE_REAL_HTTP=1
 
-Для быстрых расчетов используйте CLI версию:
+export ROUTE_API_BASE_URL="https://real-routes.example.com/v1"
+export ROUTE_API_KEY="REAL_ROUTES_KEY"
 
-```bash
-python3 co2_cli.py
-```
+export CO2_API_BASE_URL="https://real-co2.example.com/v1"
+export CO2_API_KEY="REAL_CO2_KEY"
 
-**Возможности CLI (города):**
-- 🚀 **Быстрый запуск** - идеально для скриптов и автоматизации
-- 🔍 **Поиск городов** - интерактивный выбор из найденных вариантов
-- 📋 **Подробные результаты** - вся информация в текстовом формате
-- 🔄 **Множественные расчеты** - можно выполнить несколько расчетов подряд
+python example.py
+В этом режиме:
 
-### 📍 CLI по координатам
-
-Отдельный скрипт для расчёта выбросов по координатам двух точек:
-
-```bash
-python3 co2_routes_cli.py lat1 lon1 lat2 lon2
-```
-
-Пример:
-
-```bash
-python3 co2_routes_cli.py 55.7558 37.6176 59.9311 30.3609
-```
-
-Скрипт выводит в консоль таблицу по всем поддерживаемым видам транспорта с 
-расстоянием, коэффициентами и выбросами CO2. Для использования реальных 
-маршрутов OpenRouteService установите переменную окружения `ORS_API_KEY`.
-
-## Структура проекта
-
-```
-counterCO2/
-├── co2_calculator.py      # Основной модуль расчета CO2
-├── cities_database.py     # База данных городов с координатами
-├── transport_logic.py     # Логика определения доступных видов транспорта
-├── co2_cli.py            # Интерфейс командной строки (CLI по городам)
-├── co2_routes_cli.py     # Интерфейс командной строки (CLI по координатам)
-├── example.py            # Примеры программного использования
-├── test_basic.py         # Базовые тесты
-├── requirements.txt      # Зависимости (только стандартная библиотека)
-└── README.md            # Документация
-```
-
-## Технические детали
-
-### Формула Хаверсина
-Для расчета расстояний по прямой используется формула Хаверсина, которая учитывает кривизну Земли:
-
-```
-a = sin²(Δφ/2) + cos φ1 ⋅ cos φ2 ⋅ sin²(Δλ/2)
-c = 2 ⋅ atan2( √a, √(1−a) )
-d = R ⋅ c
-```
-
-где φ - широта, λ - долгота, R - радиус Земли (6371 км).
-
-### OpenRouteService API
-API поддерживает различные профили маршрутизации:
-- `driving-car` - для автомобилей и автобусов
-- `cycling` - для велосипедов
-- `walking` - для пешеходов
-
-Для поездов используется приблизительный расчет через автомобильные дороги.
-Для самолетов всегда используется прямое расстояние.
-
-### Обработка ошибок
-Модуль устойчив к ошибкам:
-- Отсутствие API ключа → переход на прямой расчет
-- Ошибки сети → переход на прямой расчет
-- Неверные параметры → исключения с понятными сообщениями
-
-## Лицензия
-
-MIT License - свободное использование для любых целей.
-
-## Вклад в проект
-
-Приветствуются улучшения и дополнения:
-- Новые коэффициенты выбросов
-- Поддержка других API маршрутизации
-- Дополнительные виды транспорта
-- Улучшения производительности
-
-## Контакты
-
-Если у вас есть вопросы или предложения, создайте issue в репозитории проекта.
+клиенты формируют HTTP-запросы методом POST с JSON-телом;
+выполняется запрос через urllib.request.urlopen;
+ответ ожидается в формате JSON и парсится через json.loads;
+при ошибках уровня HTTP (4xx/5xx) выбрасывается RuntimeError с кодом и текстом ошибки сервера.
+Поведение при ошибках
+Ошибки HTTP (например, 400, 401, 500) приводят к выбрасыванию RuntimeError с описанием вида:
+RouteApiClient HTTP error: <код> <reason> или
+Co2ApiClient HTTP error: <код> <reason>.
+При пустом теле ответа в режиме реальных HTTP-клиенты возвращают пустой словарь {}.
