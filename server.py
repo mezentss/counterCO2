@@ -31,10 +31,17 @@
 """
 
 import json
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
-from example import Point, RouteApiClient, Co2ApiClient
+from api_clients import Co2ApiClient, RouteApiClient
+from api_models import Point, Route
+from transport_aggregator import (
+    TransportRoutesQuery,
+    TransportRoutesClient,
+    create_default_transport_client,
+)
 
 
 class ApiHandler(BaseHTTPRequestHandler):
@@ -42,6 +49,7 @@ class ApiHandler(BaseHTTPRequestHandler):
 
     route_client = RouteApiClient()
     co2_client = Co2ApiClient()
+    transport_client: TransportRoutesClient = create_default_transport_client()
 
     def _read_json_body(self) -> Dict[str, Any]:
         """Считать и распарсить JSON-тело запроса.
@@ -125,6 +133,8 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._handle_emissions()
         elif self.path == "/api/full":
             self._handle_full()
+        elif self.path == "/api/transport/routes":
+            self._handle_transport_routes()
         else:
             self._send_json(404, {"error": "Not found"})
 
@@ -162,7 +172,6 @@ class ApiHandler(BaseHTTPRequestHandler):
 
         dummy_start = Point(lat=0.0, lon=0.0)
         dummy_end = Point(lat=0.0, lon=0.0)
-        from example import Route  # локальный импорт, чтобы избежать циклов при импорте
 
         route = Route(start=dummy_start, end=dummy_end, distance_km=distance_km)
 
@@ -196,6 +205,87 @@ class ApiHandler(BaseHTTPRequestHandler):
             "emissions": emissions,
         }
         self._send_json(200, response)
+
+    def _handle_transport_routes(self) -> None:
+        data = self._read_json_body()
+
+        try:
+            start_data = data["start"]
+            end_data = data["end"]
+            start = Point(lat=float(start_data["lat"]), lon=float(start_data["lon"]))
+            end = Point(lat=float(end_data["lat"]), lon=float(end_data["lon"]))
+
+            departure_raw: Optional[str] = data.get("departure_datetime")
+            departure_datetime: Optional[datetime]
+            if departure_raw:
+                departure_datetime = datetime.fromisoformat(departure_raw)
+            else:
+                departure_datetime = None
+
+            allowed_transports_raw = data.get("allowed_transports")
+            allowed_transports: Optional[List[str]]
+            if isinstance(allowed_transports_raw, list):
+                allowed_transports = [str(t) for t in allowed_transports_raw]
+            else:
+                allowed_transports = None
+
+            max_results_raw = data.get("max_results")
+            max_results: int
+            if max_results_raw is None:
+                max_results = 10
+            else:
+                max_results = int(max_results_raw)
+        except (KeyError, TypeError, ValueError):
+            self._send_json(400, {"error": "Invalid payload for /api/transport/routes"})
+            return
+
+        query = TransportRoutesQuery(
+            start=start,
+            end=end,
+            departure_datetime=departure_datetime,
+            allowed_transports=allowed_transports,
+            max_results=max_results,
+        )
+
+        routes = self.transport_client.get_routes(query)
+
+        def _serialize_datetime(value: datetime) -> str:
+            return value.isoformat()
+
+        serialized_routes: List[Dict[str, Any]] = []
+        for route in routes:
+            segments_payload = []
+            for segment in route.segments:
+                segments_payload.append(
+                    {
+                        "mode": segment.mode,
+                        "provider": segment.provider,
+                        "line": segment.line,
+                        "flight_number": segment.flight_number,
+                        "from": segment.from_location,
+                        "to": segment.to_location,
+                        "distance_km": segment.distance_km,
+                        "duration_minutes": segment.duration_minutes,
+                        "departure_datetime": _serialize_datetime(segment.departure_datetime),
+                        "arrival_datetime": _serialize_datetime(segment.arrival_datetime),
+                    }
+                )
+
+            serialized_routes.append(
+                {
+                    "id": route.id,
+                    "transport_type": route.transport_type,
+                    "provider": route.provider,
+                    "segments": segments_payload,
+                    "total_distance_km": route.total_distance_km,
+                    "total_duration_minutes": route.total_duration_minutes,
+                    "currency": route.currency,
+                    "price": route.price,
+                }
+            )
+
+        payload = {"routes": serialized_routes}
+        self._send_json(200, payload)
 
     # Отключим лишние логи, чтобы не засорять вывод
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A003 (совпадает с BaseHTTPRequestHandler)

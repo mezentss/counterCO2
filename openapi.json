@@ -50,6 +50,44 @@
         }
       }
     },
+    "/api/transport/routes": {
+      "post": {
+        "summary": "Получение вариантов маршрутов для разных видов транспорта",
+        "description": "Возвращает список вариантов маршрутов (поезд, самолёт, автобус, автомобиль и др.) между двумя точками.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransportRoutesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Успешное получение вариантов маршрутов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransportRoutesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Неверный формат входных данных",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/emissions": {
       "post": {
         "summary": "Расчёт выбросов CO2 по расстоянию",
@@ -210,6 +248,159 @@
           },
           "emissions": {
             "$ref": "#/components/schemas/EmissionsResponse"
+          }
+        }
+      },
+      "TransportRoutesRequest": {
+        "type": "object",
+        "required": ["start", "end"],
+        "properties": {
+          "start": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "end": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "departure_datetime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Желаемое время отправления",
+            "example": "2025-11-23T09:00:00Z"
+          },
+          "allowed_transports": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "example": "train"
+            },
+            "description": "Ограничение по типам транспорта (train, plane, bus, car, metro, tram и др.)"
+          },
+          "max_results": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 10,
+            "description": "Максимальное количество маршрутов в ответе"
+          }
+        }
+      },
+      "TransportRoutesResponse": {
+        "type": "object",
+        "required": ["routes"],
+        "properties": {
+          "routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransportRouteOption"
+            }
+          }
+        }
+      },
+      "TransportRouteOption": {
+        "type": "object",
+        "required": ["id", "transport_type", "provider", "segments", "total_distance_km", "total_duration_minutes"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Идентификатор маршрута у провайдера",
+            "example": "rzd_12345"
+          },
+          "transport_type": {
+            "type": "string",
+            "description": "Основной тип транспорта для маршрута (train, plane, bus, car и др.)",
+            "example": "train"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Название внешнего провайдера (например, rzd, aviasales)",
+            "example": "rzd"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransportSegment"
+            }
+          },
+          "total_distance_km": {
+            "type": "number",
+            "format": "double",
+            "description": "Общая протяжённость маршрута в километрах",
+            "example": 650.0
+          },
+          "total_duration_minutes": {
+            "type": "integer",
+            "description": "Общая продолжительность маршрута в минутах",
+            "example": 240
+          },
+          "currency": {
+            "type": "string",
+            "description": "Валюта цены",
+            "example": "RUB"
+          },
+          "price": {
+            "type": "number",
+            "format": "double",
+            "description": "Ориентировочная стоимость маршрута в указанной валюте",
+            "example": 4500.0
+          }
+        }
+      },
+      "TransportSegment": {
+        "type": "object",
+        "required": ["mode", "provider", "from", "to", "distance_km", "duration_minutes", "departure_datetime", "arrival_datetime"],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "Режим транспорта для сегмента (train, plane, bus, car, metro и др.)",
+            "example": "train"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Провайдер конкретного сегмента",
+            "example": "rzd"
+          },
+          "line": {
+            "type": "string",
+            "description": "Линия/марка маршрута (поезд, маршрут автобуса и т.п.)",
+            "example": "Сапсан"
+          },
+          "flight_number": {
+            "type": "string",
+            "description": "Номер рейса для авиаперелёта (если применимо)",
+            "example": "SU1234"
+          },
+          "from": {
+            "type": "string",
+            "description": "Точка отправления сегмента (город/станция/код аэропорта)",
+            "example": "Москва, Ленинградский вокзал"
+          },
+          "to": {
+            "type": "string",
+            "description": "Точка прибытия сегмента",
+            "example": "Санкт-Петербург, Московский вокзал"
+          },
+          "distance_km": {
+            "type": "number",
+            "format": "double",
+            "description": "Длина сегмента в километрах",
+            "example": 650.0
+          },
+          "duration_minutes": {
+            "type": "integer",
+            "description": "Продолжительность сегмента в минутах",
+            "example": 240
+          },
+          "departure_datetime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Время отправления сегмента",
+            "example": "2025-11-23T09:00:00+03:00"
+          },
+          "arrival_datetime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Время прибытия сегмента",
+            "example": "2025-11-23T13:00:00+03:00"
           }
         }
       },
