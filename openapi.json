@@ -1,0 +1,228 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "CO2 API Server",
+    "version": "1.0.0",
+    "description": "Простой API для расчёта маршрута и выбросов CO2."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000",
+      "description": "Локальный сервер разработки"
+    }
+  ],
+  "paths": {
+    "/api/route": {
+      "post": {
+        "summary": "Расчёт маршрута между двумя точками",
+        "description": "Возвращает маршрут и расстояние между двумя географическими точками.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Успешный расчёт маршрута",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Неверный формат входных данных",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/emissions": {
+      "post": {
+        "summary": "Расчёт выбросов CO2 по расстоянию",
+        "description": "Принимает расстояние маршрута и тип транспорта, возвращает оценку выбросов CO2.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmissionsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Успешный расчёт выбросов CO2",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmissionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Неверный формат входных данных",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/full": {
+      "post": {
+        "summary": "Полный расчёт маршрута и выбросов CO2",
+        "description": "Сначала рассчитывает маршрут между двумя точками, затем оценивает выбросы CO2 для этого маршрута.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Успешный расчёт маршрута и выбросов CO2",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Неверный формат входных данных",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Point": {
+        "type": "object",
+        "required": ["lat", "lon"],
+        "properties": {
+          "lat": {
+            "type": "number",
+            "format": "double",
+            "example": 55.7558
+          },
+          "lon": {
+            "type": "number",
+            "format": "double",
+            "example": 37.6176
+          }
+        }
+      },
+      "RouteRequest": {
+        "type": "object",
+        "required": ["start", "end"],
+        "properties": {
+          "start": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "end": {
+            "$ref": "#/components/schemas/Point"
+          }
+        }
+      },
+      "RouteResponse": {
+        "type": "object",
+        "required": ["start", "end", "distance_km"],
+        "properties": {
+          "start": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "end": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "distance_km": {
+            "type": "number",
+            "format": "double",
+            "example": 633.5
+          }
+        }
+      },
+      "EmissionsRequest": {
+        "type": "object",
+        "required": ["distance_km"],
+        "properties": {
+          "distance_km": {
+            "type": "number",
+            "format": "double",
+            "example": 633.5
+          },
+          "transport_type": {
+            "type": "string",
+            "description": "Тип транспорта, по умолчанию 'car', если не указан.",
+            "example": "car"
+          }
+        }
+      },
+      "EmissionsResponse": {
+        "type": "object",
+        "description": "Структура соответствует тому, что возвращает Co2ApiClient.get_emissions(route).",
+        "additionalProperties": true,
+        "properties": {
+          "transport_type": {
+            "type": "string",
+            "example": "car"
+          }
+        }
+      },
+      "FullResponse": {
+        "type": "object",
+        "required": ["route", "emissions"],
+        "properties": {
+          "route": {
+            "$ref": "#/components/schemas/RouteResponse"
+          },
+          "emissions": {
+            "$ref": "#/components/schemas/EmissionsResponse"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Invalid payload for /api/route"
+          }
+        }
+      }
+    }
+  }
+}
