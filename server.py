@@ -1,308 +1,273 @@
 #!/usr/bin/env python3
-"""Простой HTTP-сервер с API для расчёта маршрута и выбросов CO2.
+"""FastAPI-сервер с API для расчёта маршрута и выбросов CO2.
 
 Сервер предоставляет несколько эндпоинтов:
 
-- POST /api/route
-  Тело (JSON):
-    {
-      "start": {"lat": <float>, "lon": <float>},
-      "end":   {"lat": <float>, "lon": <float>}
-    }
-  Ответ (JSON): описание маршрута, полученного через RouteApiClient.
-
-- POST /api/emissions
-  Тело (JSON):
-    {
-      "distance_km": <float>,
-      "transport_type": "car"
-    }
-  Ответ (JSON): расчёт выбросов CO2 от Co2ApiClient.
-
-- POST /api/full
-  Тело (JSON):
-    {
-      "start": {"lat": <float>, "lon": <float>},
-      "end":   {"lat": <float>, "lon": <float>}
-    }
-  Ответ (JSON): комбинированный результат (маршрут + CO2).
-
-Все вычисления происходят внутри процесса: сервер не делает внешних HTTP-запросов.
+- GET /api/integrations - список доступных источников интеграции
+- POST /api/integrations/select - выбор источника интеграции
+- POST /api/route - расчёт маршрута
+- POST /api/emissions - расчёт выбросов CO2
+- POST /api/full - комбинированный запрос (маршрут + CO2)
 """
 
-import json
-from datetime import datetime
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Dict, List, Optional
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+import os
+import sys
+import uvicorn
 
-from api_clients import Co2ApiClient, RouteApiClient
-from api_models import Point, Route
-from transport_aggregator import (
-    TransportRoutesQuery,
-    TransportRoutesClient,
-    create_default_transport_client,
+from api_models import Point
+from integration_manager import integration_manager
+
+app = FastAPI(
+    title="CO2 Calculator API",
+    description="API для расчёта выбросов CO2 с поддержкой нескольких источников интеграции",
+    version="1.0.0",
+    openapi_url="/api/v1/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
+# Создаем директорию для статических файлов, если её нет
+os.makedirs("static", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-class ApiHandler(BaseHTTPRequestHandler):
-    """Обработчик HTTP-запросов для простого JSON API."""
+class IntegrationModel(BaseModel):
+    name: str
 
-    route_client = RouteApiClient()
-    co2_client = Co2ApiClient()
-    transport_client: TransportRoutesClient = create_default_transport_client()
+class RouteRequest(BaseModel):
+    start: Point
+    end: Point
 
-    def _read_json_body(self) -> Dict[str, Any]:
-        """Считать и распарсить JSON-тело запроса.
+class EmissionsRequest(BaseModel):
+    distance_km: float
+    transport_type: str = "car"
 
-        При ошибке парсинга возвращает пустой словарь.
-        """
+@app.get("/api/integrations", response_model=List[str])
+async def list_integrations():
+    """Получить список доступных источников интеграции."""
+    return integration_manager.list_integrations()
 
-        content_length = int(self.headers.get("Content-Length", "0"))
-        if content_length == 0:
-            return {}
+@app.post("/api/integrations/select")
+async def select_integration(integration: IntegrationModel):
+    """Выбрать текущий источник интеграции."""
+    success = integration_manager.set_current_integration(integration.name)
+    if not success:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    return {"status": "success", "selected": integration.name}
 
-        raw_body = self.rfile.read(content_length)
-        try:
-            return json.loads(raw_body.decode("utf-8"))
-        except json.JSONDecodeError:
-            return {}
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    """Главная страница с веб-интерфейсом."""
+    return """
+    <!doctype html>
+    <html>
+    <head>
+        <title>CO2 Calculator</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+        <div class="container mt-5">
+            <h1>CO2 Calculator</h1>
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5>Источник интеграции</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Выберите источник данных:</label>
+                        <select id="integrationSelect" class="form-select">
+                            <option value="">Загрузка...</option>
+                        </select>
+                    </div>
+                    <button id="selectIntegration" class="btn btn-primary">Выбрать</button>
+                    <div id="status" class="mt-3"></div>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5>Текущий источник</h5>
+                </div>
+                <div class="card-body">
+                    <p id="currentIntegration">Не выбран</p>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5>Документация API</h5>
+                </div>
+                <div class="card-body">
+                    <p>Доступные эндпоинты:</p>
+                    <ul>
+                        <li><code>GET /api/integrations</code> - список источников</li>
+                        <li><code>POST /api/integrations/select</code> - выбор источника</li>
+                        <li><code>POST /api/route</code> - расчёт маршрута</li>
+                        <li><code>POST /api/emissions</code> - расчёт выбросов</li>
+                        <li><code>POST /api/full</code> - полный запрос</li>
+                    </ul>
+                    <p>Документация по API: <a href="/docs" target="_blank">Swagger UI</a></p>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+            // Функция для обновления отображения текущего источника
+            function updateCurrentIntegration() {
+                fetch('/api/integrations')
+                    .then(response => response.json())
+                    .then(integrations => {
+                        const current = integrations[0]; // Источник по умолчанию первый
+                        document.getElementById('currentIntegration').textContent = current || 'Не выбран';
+                    });
+            }
+            
+            // Загрузка доступных источников
+            fetch('/api/integrations')
+                .then(response => response.json())
+                .then(integrations => {
+                    const select = document.getElementById('integrationSelect');
+                    select.innerHTML = '';
+                    
+                    integrations.forEach(integration => {
+                        const option = document.createElement('option');
+                        option.value = integration;
+                        option.textContent = integration;
+                        select.appendChild(option);
+                    });
+                    
+                    // Обновляем отображение текущего источника
+                    updateCurrentIntegration();
+                });
 
-    def _send_json(self, status_code: int, payload: Dict[str, Any]) -> None:
-        """Отправить JSON-ответ с заданным статусом."""
-
-        body = json.dumps(payload).encode("utf-8")
-        self.send_response(status_code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _send_html(self, status_code: int, html: str) -> None:
-        """Отправить простой HTML-ответ."""
-
-        body = html.encode("utf-8")
-        self.send_response(status_code)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def do_GET(self) -> None:  # noqa: N802
-        """Обработка GET-запросов.
-
-        При обращении к корню ("/") возвращает простую страницу с описанием API.
-        """
-
-        if self.path == "/":
-            html = """<!doctype html>
-<html lang=\"ru\">
-  <head>
-    <meta charset=\"utf-8\" />
-    <title>CO2 API Server</title>
-    <style>
-      body { font-family: system-ui, -apple-system, sans-serif; margin: 2rem; }
-      code { background: #f5f5f5; padding: 2px 4px; border-radius: 3px; }
-      pre { background: #f5f5f5; padding: 1rem; border-radius: 4px; }
-    </style>
-  </head>
-  <body>
-    <h1>CO2 API Server</h1>
-    <p>Сервер запущен. Доступны следующие эндпоинты:</p>
-    <ul>
-      <li><code>POST /api/route</code> — расчёт маршрута по двум точкам.</li>
-      <li><code>POST /api/emissions</code> — расчёт выбросов CO2 по расстоянию.</li>
-      <li><code>POST /api/full</code> — маршрут + расчёт выбросов CO2.</li>
-    </ul>
-    <p>Пример запроса с помощью <code>curl</code>:</p>
-    <pre><code>curl -X POST http://127.0.0.1:8000/api/full \
-  -H \"Content-Type: application/json\" \
-  -d '{"start": {"lat": 55.7558, "lon": 37.6176}, "end": {"lat": 59.9311, "lon": 30.3609}}'</code></pre>
-  </body>
-</html>
-"""
-            self._send_html(200, html)
-        else:
-            self._send_html(404, "<h1>404 Not Found</h1>")
-
-    def do_POST(self) -> None:  # noqa: N802 (имя метода задано стандартной библиотекой)
-        """Обработка POST-запросов."""
-
-        if self.path == "/api/route":
-            self._handle_route()
-        elif self.path == "/api/emissions":
-            self._handle_emissions()
-        elif self.path == "/api/full":
-            self._handle_full()
-        elif self.path == "/api/transport/routes":
-            self._handle_transport_routes()
-        else:
-            self._send_json(404, {"error": "Not found"})
-
-    # Маршруты
-
-    def _handle_route(self) -> None:
-        data = self._read_json_body()
-
-        try:
-            start_data = data["start"]
-            end_data = data["end"]
-            start = Point(lat=float(start_data["lat"]), lon=float(start_data["lon"]))
-            end = Point(lat=float(end_data["lat"]), lon=float(end_data["lon"]))
-        except (KeyError, TypeError, ValueError):
-            self._send_json(400, {"error": "Invalid payload for /api/route"})
-            return
-
-        route = self.route_client.get_route(start, end)
-        response = {
-            "start": {"lat": route.start.lat, "lon": route.start.lon},
-            "end": {"lat": route.end.lat, "lon": route.end.lon},
-            "distance_km": route.distance_km,
-        }
-        self._send_json(200, response)
-
-    def _handle_emissions(self) -> None:
-        data = self._read_json_body()
-
-        try:
-            distance_km = float(data["distance_km"])
-            transport_type = str(data.get("transport_type", "car"))
-        except (KeyError, TypeError, ValueError):
-            self._send_json(400, {"error": "Invalid payload for /api/emissions"})
-            return
-
-        dummy_start = Point(lat=0.0, lon=0.0)
-        dummy_end = Point(lat=0.0, lon=0.0)
-
-        route = Route(start=dummy_start, end=dummy_end, distance_km=distance_km)
-
-        emissions = self.co2_client.get_emissions(route)
-
-        # При желании можно заменить тип транспорта, если он пришёл в запросе
-        emissions["transport_type"] = transport_type
-        self._send_json(200, emissions)
-
-    def _handle_full(self) -> None:
-        data = self._read_json_body()
-
-        try:
-            start_data = data["start"]
-            end_data = data["end"]
-            start = Point(lat=float(start_data["lat"]), lon=float(start_data["lon"]))
-            end = Point(lat=float(end_data["lat"]), lon=float(end_data["lon"]))
-        except (KeyError, TypeError, ValueError):
-            self._send_json(400, {"error": "Invalid payload for /api/full"})
-            return
-
-        route = self.route_client.get_route(start, end)
-        emissions = self.co2_client.get_emissions(route)
-
-        response = {
-            "route": {
-                "start": {"lat": route.start.lat, "lon": route.start.lon},
-                "end": {"lat": route.end.lat, "lon": route.end.lon},
-                "distance_km": route.distance_km,
-            },
-            "emissions": emissions,
-        }
-        self._send_json(200, response)
-
-    def _handle_transport_routes(self) -> None:
-        data = self._read_json_body()
-
-        try:
-            start_data = data["start"]
-            end_data = data["end"]
-            start = Point(lat=float(start_data["lat"]), lon=float(start_data["lon"]))
-            end = Point(lat=float(end_data["lat"]), lon=float(end_data["lon"]))
-
-            departure_raw: Optional[str] = data.get("departure_datetime")
-            departure_datetime: Optional[datetime]
-            if departure_raw:
-                departure_datetime = datetime.fromisoformat(departure_raw)
-            else:
-                departure_datetime = None
-
-            allowed_transports_raw = data.get("allowed_transports")
-            allowed_transports: Optional[List[str]]
-            if isinstance(allowed_transports_raw, list):
-                allowed_transports = [str(t) for t in allowed_transports_raw]
-            else:
-                allowed_transports = None
-
-            max_results_raw = data.get("max_results")
-            max_results: int
-            if max_results_raw is None:
-                max_results = 10
-            else:
-                max_results = int(max_results_raw)
-        except (KeyError, TypeError, ValueError):
-            self._send_json(400, {"error": "Invalid payload for /api/transport/routes"})
-            return
-
-        query = TransportRoutesQuery(
-            start=start,
-            end=end,
-            departure_datetime=departure_datetime,
-            allowed_transports=allowed_transports,
-            max_results=max_results,
-        )
-
-        routes = self.transport_client.get_routes(query)
-
-        def _serialize_datetime(value: datetime) -> str:
-            return value.isoformat()
-
-        serialized_routes: List[Dict[str, Any]] = []
-        for route in routes:
-            segments_payload = []
-            for segment in route.segments:
-                segments_payload.append(
-                    {
-                        "mode": segment.mode,
-                        "provider": segment.provider,
-                        "line": segment.line,
-                        "flight_number": segment.flight_number,
-                        "from": segment.from_location,
-                        "to": segment.to_location,
-                        "distance_km": segment.distance_km,
-                        "duration_minutes": segment.duration_minutes,
-                        "departure_datetime": _serialize_datetime(segment.departure_datetime),
-                        "arrival_datetime": _serialize_datetime(segment.arrival_datetime),
-                    }
-                )
-
-            serialized_routes.append(
-                {
-                    "id": route.id,
-                    "transport_type": route.transport_type,
-                    "provider": route.provider,
-                    "segments": segments_payload,
-                    "total_distance_km": route.total_distance_km,
-                    "total_duration_minutes": route.total_duration_minutes,
-                    "currency": route.currency,
-                    "price": route.price,
+            // Обработка выбора источника
+            document.getElementById('selectIntegration').addEventListener('click', () => {
+                const select = document.getElementById('integrationSelect');
+                const integration = select.value;
+                const statusDiv = document.getElementById('status');
+                
+                if (!integration) {
+                    statusDiv.innerHTML = '<div class="alert alert-warning">Выберите источник интеграции</div>';
+                    return;
                 }
-            )
+                
+                statusDiv.innerHTML = '<div class="alert alert-info">Переключение источника...</div>';
+                
+                fetch('/api/integrations/select', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name: integration })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Ошибка при переключении источника');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    statusDiv.innerHTML = `<div class="alert alert-success">Выбран источник: ${data.selected}</div>`;
+                    document.getElementById('currentIntegration').textContent = data.selected;
+                    
+                    // Очищаем статус через 3 секунды
+                    setTimeout(() => {
+                        statusDiv.innerHTML = '';
+                    }, 3000);
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    statusDiv.innerHTML = `<div class="alert alert-danger">Ошибка: ${error.message}</div>`;
+                });
+            });
+        </script>
+    </body>
+    </html>
+    """
 
-        payload = {"routes": serialized_routes}
-        self._send_json(200, payload)
+@app.post("/api/route")
+async def get_route(route_request: RouteRequest):
+    """Получить маршрут между двумя точками."""
+    try:
+        print(f"Getting route from {route_request.start} to {route_request.end}")
+        route_client = integration_manager.get_route_client()
+        print(f"Using route client: {route_client.__class__.__name__}")
+        route = route_client.get_route(route_request.start, route_request.end)
+        print(f"Route received: {route}")
+        
+        # Handle both Pydantic v1 and v2
+        if hasattr(route, 'model_dump'):  # Pydantic v2
+            result = route.model_dump()
+        else:  # Pydantic v1
+            result = route.dict() if hasattr(route, 'dict') else route.__dict__
+            
+        print(f"Returning: {result}")
+        return result
+    except Exception as e:
+        import traceback
+        error_details = f"Error in get_route: {str(e)}\n{traceback.format_exc()}"
+        print(error_details, file=sys.stderr)
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # Отключим лишние логи, чтобы не засорять вывод
-    def log_message(self, format: str, *args: Any) -> None:  # noqa: A003 (совпадает с BaseHTTPRequestHandler)
-        return
+@app.post("/api/emissions")
+async def get_emissions(emissions_request: EmissionsRequest):
+    """Рассчитать выбросы CO2."""
+    try:
+        from api_models import Route
+        dummy_route = Route(
+            start=Point(lat=0, lon=0),
+            end=Point(lat=0, lon=0),
+            distance_km=emissions_request.distance_km
+        )
+        result = integration_manager.get_co2_client().get_emissions(
+            dummy_route,
+            transport_type=emissions_request.transport_type
+        )
+        return result
+    except Exception as e:
+        import traceback
+        error_details = f"Error in get_emissions: {str(e)}\n{traceback.format_exc()}"
+        print(error_details, file=sys.stderr)
+        raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/full")
+async def get_full_route(route_request: RouteRequest):
+    """Полный запрос: маршрут + выбросы CO2."""
+    try:
+        # Получаем маршрут
+        route = integration_manager.get_route_client().get_route(
+            route_request.start, 
+            route_request.end
+        )
+        
+        # Рассчитываем выбросы
+        emissions = integration_manager.get_co2_client().get_emissions(route)
+        
+        # Handle both Pydantic v1 and v2
+        def to_dict(obj):
+            if hasattr(obj, 'model_dump'):  # Pydantic v2
+                return obj.model_dump()
+            return obj.dict() if hasattr(obj, 'dict') else obj.__dict__
+        
+        return {
+            "route": to_dict(route),
+            "emissions": emissions
+        }
+    except Exception as e:
+        import traceback
+        error_details = f"Error in get_full_route: {str(e)}\n{traceback.format_exc()}"
+        print(error_details, file=sys.stderr)
+        raise HTTPException(status_code=500, detail=str(e))
 
-def run_server(host: str = "127.0.0.1", port: int = 8000) -> None:
+def run_server(host: str = "0.0.0.0", port: int = 8000):
     """Запустить HTTP-сервер."""
-
-    server_address = (host, port)
-    httpd = HTTPServer(server_address, ApiHandler)
-    print(f"Serving API on http://{host}:{port}")
-    print("Endpoints:")
-    print("  POST /api/route")
-    print("  POST /api/emissions")
-    print("  POST /api/full")
-    httpd.serve_forever()
+    print(f"Запуск сервера на http://{host}:{port}")
+    print("Нажмите Ctrl+C для остановки")
+    uvicorn.run("server:app", host=host, port=port, reload=True)
 
 
 if __name__ == "__main__":
