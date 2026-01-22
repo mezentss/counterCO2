@@ -336,7 +336,25 @@ async def perform_compare(update: Update, user_id: int) -> None:
             await update.message.reply_text("❌ Не удалось рассчитать выбросы для одного из маршрутов")
             return
         
-        chart_bytes = create_comparison_pie_chart(route1_data, route2_data)
+        # Find best transport for each route
+        best_route1_idx = route1_data['emissions'].index(min(route1_data['emissions']))
+        best_route2_idx = route2_data['emissions'].index(min(route2_data['emissions']))
+        
+        # Create comparison chart data
+        comparison_data = {
+            'transport': [],
+            'emissions': []
+        }
+        
+        # Add best transports to comparison
+        comparison_data['transport'].append(f"Маршрут 1: {TRANSPORT_NAMES.get(route1_data['transport'][best_route1_idx], route1_data['transport'][best_route1_idx])}")
+        comparison_data['emissions'].append(route1_data['emissions'][best_route1_idx])
+        
+        comparison_data['transport'].append(f"Маршрут 2: {TRANSPORT_NAMES.get(route2_data['transport'][best_route2_idx], route2_data['transport'][best_route2_idx])}")
+        comparison_data['emissions'].append(route2_data['emissions'][best_route2_idx])
+        
+        # Generate comparison chart
+        chart_bytes = create_transport_comparison(comparison_data)
         
         total1 = sum(route1_data['emissions'])
         total2 = sum(route2_data['emissions'])
@@ -345,10 +363,12 @@ async def perform_compare(update: Update, user_id: int) -> None:
             f"📈 Сравнение маршрутов:\n\n"
             f"🛣️ Маршрут 1: {city1_from} → {city1_to}\n"
             f"📏 Расстояние: {distance1_km:.1f} км\n"
-            f"💨 Суммарные выбросы: {total1:.2f} кг CO₂\n\n"
+            f"✅ Лучший транспорт: {TRANSPORT_NAMES.get(route1_data['transport'][best_route1_idx])}\n"
+            f"💨 Минимальные выбросы: {route1_data['emissions'][best_route1_idx]:.2f} кг CO₂\n\n"
             f"🛣️ Маршрут 2: {city2_from} → {city2_to}\n"
             f"📏 Расстояние: {distance2_km:.1f} км\n"
-            f"💨 Суммарные выбросы: {total2:.2f} кг CO₂\n\n"
+            f"✅ Лучший транспорт: {TRANSPORT_NAMES.get(route2_data['transport'][best_route2_idx])}\n"
+            f"💨 Минимальные выбросы: {route2_data['emissions'][best_route2_idx]:.2f} кг CO₂\n\n"
         )
         
         if total1 < total2:
