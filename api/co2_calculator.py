@@ -21,12 +21,11 @@ class CO2Calculator:
         'plane': 0.25
     }
     
-    # Профили транспорта для OpenRouteService API
     TRANSPORT_PROFILES = {
         'car': 'driving-car',
-        'bus': 'driving-car',  # Автобусы используют автомобильные дороги
-        'train': 'driving-car',  # Приблизительно через автодороги
-        'plane': None  # Для самолетов используем прямое расстояние
+        'bus': 'driving-car',
+        'train': 'driving-car',
+        'plane': None
     }
     
     def __init__(self, ors_api_key: Optional[str] = None):
@@ -93,12 +92,11 @@ class CO2Calculator:
         if transport_type not in self.TRANSPORT_PROFILES:
             raise ValueError(f"Неподдерживаемый тип транспорта: {transport_type}")
         
-        # Для самолетов используем прямое расстояние
         if transport_type == 'plane':
             return self.calculate_distance_direct(lat1, lon1, lat2, lon2)
         
         if not self.ors_api_key:
-            print("Предупреждение: API ключ не предоставлен, используется прямое расстояние")
+            print("API key not provided, using direct distance")
             return self.calculate_distance_direct(lat1, lon1, lat2, lon2)
         
         profile = self.TRANSPORT_PROFILES[transport_type]
@@ -117,15 +115,14 @@ class CO2Calculator:
             with urllib.request.urlopen(request) as response:
                 data = json.loads(response.read().decode())
                 
-            # Извлекаем расстояние из ответа (в метрах, конвертируем в км)
             distance_m = data['routes'][0]['summary']['distance']
             distance_km = distance_m / 1000.0
             
             return distance_km
             
         except Exception as e:
-            print(f"Ошибка при запросе к OpenRouteService API: {e}")
-            print("Используется расчет по прямой")
+            print(f"OpenRouteService API error: {e}")
+            print("Using direct distance calculation")
             return self.calculate_distance_direct(lat1, lon1, lat2, lon2)
     
     def get_co2_emissions(self, distance_km: float, transport_type: str) -> float:

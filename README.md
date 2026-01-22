@@ -2,6 +2,18 @@
 
 Минимальный учебный проект для расчета выбросов CO₂ и демонстрации интеграции с внешними API.
 
+## Telegram-бот
+
+Проект включает Telegram-бота для расчёта выбросов CO₂ между двумя городами. Подробная инструкция по запуску и использованию находится в файле [TELEGRAM_BOT_README.md](TELEGRAM_BOT_README.md).
+
+**Быстрый старт:**
+1. Установите зависимости: `pip install -r requirements.txt`
+2. Получите токен бота у [@BotFather](https://t.me/BotFather)
+3. Установите переменную окружения: `export TELEGRAM_BOT_TOKEN="ваш_токен"`
+4. Запустите бота: `python telegram_bot.py`
+
+Бот поддерживает команды `/start`, `/help`, `/calculate` и рассчитывает выбросы CO₂ для самолёта, поезда, автомобиля и автобуса.
+
 Основная бизнес-логика расчета находится в [co2_calculator.py](cci:7://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/co2_calculator.py:0:0-0:0) и использует только стандартную библиотеку Python.
 
 Файл [example.py](cci:7://file:///Users/sofya.mezentseva/PycharmProjects/counterCO2/example.py:0:0-0:0) демонстрирует концепцию API-клиентов:

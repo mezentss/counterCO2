@@ -3,7 +3,7 @@
 Учитывает расстояние, географические особенности и практичность использования.
 """
 
-from co2_calculator import CO2Calculator
+from api.co2_calculator import CO2Calculator
 
 
 class TransportAvailability:
