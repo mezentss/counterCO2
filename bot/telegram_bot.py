@@ -38,8 +38,7 @@ def get_main_keyboard():
     keyboard = [
         [InlineKeyboardButton("📊 Рассчитать выбросы CO₂", callback_data='calculate')],
         [InlineKeyboardButton("🌱 Найти экологичный маршрут", callback_data='route_best')],
-        [InlineKeyboardButton("📈 Сравнить маршруты", callback_data='compare')],
-        [InlineKeyboardButton("❓ Справка", callback_data='help')]
+        [InlineKeyboardButton("📈 Сравнить маршруты", callback_data='compare')]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -78,10 +77,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     user_id = update.effective_user.id
     action = query.data
-    
-    if action == 'help':
-        await help_command(update, context, show_keyboard=False)
-        return
     
     # Для остальных действий редактируем сообщение
     if action == 'calculate':
